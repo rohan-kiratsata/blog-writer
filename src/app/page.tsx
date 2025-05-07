@@ -1,103 +1,236 @@
-import Image from "next/image";
+"use client";
+import React, { useState, ChangeEvent, FormEvent } from "react";
+import dynamic from "next/dynamic";
 
-export default function Home() {
+// Dynamically import react-markdown to avoid SSR issues
+const ReactMarkdown = dynamic(() => import("react-markdown"), {
+  ssr: false,
+}) as React.FC<{ children: string }>;
+
+// BlogGeneratorForm: Main UI for entering ideas and keywords, submitting, and downloading result
+function BlogGeneratorForm() {
+  // State: array of { idea: string, keywords: string[] }
+  const [ideas, setIdeas] = useState<
+    {
+      idea: string;
+      keywords: string[];
+    }[]
+  >([{ idea: "", keywords: ["", ""] }]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState("");
+  // Tab state: 'preview' or 'raw'
+  const [tab, setTab] = useState<"preview" | "raw">("preview");
+
+  // Handle input change for idea or keywords
+  const handleInputChange = (idx: number, field: string, value: string) => {
+    setIdeas((prev) => {
+      const updated = [...prev];
+      if (field === "idea") updated[idx].idea = value;
+      else updated[idx].keywords[parseInt(field)] = value;
+      return updated;
+    });
+  };
+
+  // Add a new idea row
+  const handleAddRow = () => {
+    setIdeas((prev) => [...prev, { idea: "", keywords: ["", ""] }]);
+  };
+
+  // Remove an idea row
+  const handleRemoveRow = (idx: number) => {
+    setIdeas((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Validate: all ideas must be non-empty
+  const isValid = ideas.every((row) => row.idea.trim().length > 0);
+
+  // Submit handler
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    setResult("");
+    if (!isValid) {
+      setError("Each idea is required.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Prepare payload: only send non-empty keywords
+      const payload = {
+        ideas: ideas.map((row) => ({
+          idea: row.idea.trim(),
+          keywords: row.keywords.map((k) => k.trim()).filter(Boolean),
+        })),
+      };
+      const res = await fetch("/api/generate-blogs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to generate blogs");
+      const data = await res.json();
+      if (data.markdown) setResult(data.markdown);
+      else setError("No markdown returned.");
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message);
+      else setError("Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Download the markdown result as a file
+  const handleDownload = () => {
+    const blob = new Blob([result], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "blogs.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="max-w-2xl mx-auto py-12">
+      <h1 className="text-2xl font-bold mb-6">Blog Generator</h1>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 gap-4">
+          {ideas.map((row, idx) => (
+            <div
+              key={idx}
+              className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end border-b pb-2"
+            >
+              {/* Idea input (required) */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium mb-1">
+                  Idea <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-2 py-1"
+                  value={row.idea}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange(idx, "idea", e.target.value)
+                  }
+                  required
+                  placeholder="Enter blog idea"
+                />
+              </div>
+              {/* Keyword 1 (optional) */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Keyword 1
+                </label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-2 py-1"
+                  value={row.keywords[0]}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    handleInputChange(idx, "0", e.target.value)
+                  }
+                  placeholder="Keyword (optional)"
+                />
+              </div>
+              {/* Keyword 2 (optional) */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Keyword 2
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="w-full border rounded px-2 py-1"
+                    value={row.keywords[1]}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      handleInputChange(idx, "1", e.target.value)
+                    }
+                    placeholder="Keyword (optional)"
+                  />
+                  {ideas.length > 1 && (
+                    <button
+                      type="button"
+                      className="text-red-500 font-bold px-2"
+                      onClick={() => handleRemoveRow(idx)}
+                      title="Remove this idea"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div className="flex gap-4">
+          <button
+            type="button"
+            className="bg-gray-200 rounded px-4 py-2"
+            onClick={handleAddRow}
+          >
+            + Add Idea
+          </button>
+          <button
+            type="submit"
+            className="bg-blue-600 text-white rounded px-6 py-2 font-semibold disabled:opacity-50"
+            disabled={!isValid || loading}
+          >
+            {loading ? "Generating..." : "Generate Blogs"}
+          </button>
+        </div>
+        {error && <div className="text-red-600 font-medium">{error}</div>}
+      </form>
+      {result && (
+        <div className="mt-8">
+          <button
+            className="bg-green-600 text-white rounded px-6 py-2 font-semibold mb-4"
+            onClick={handleDownload}
+          >
+            Download Markdown
+          </button>
+          {/* Tabs for Preview/Raw */}
+          <div className="mb-2 flex gap-2">
+            <button
+              className={`px-3 py-1 rounded-t border-b-2 font-semibold ${
+                tab === "preview"
+                  ? "border-blue-600 text-blue-700 bg-blue-50"
+                  : "border-transparent text-gray-600 bg-gray-100"
+              }`}
+              onClick={() => setTab("preview")}
+              type="button"
+            >
+              Preview
+            </button>
+            <button
+              className={`px-3 py-1 rounded-t border-b-2 font-semibold ${
+                tab === "raw"
+                  ? "border-blue-600 text-blue-700 bg-blue-50"
+                  : "border-transparent text-gray-600 bg-gray-100"
+              }`}
+              onClick={() => setTab("raw")}
+              type="button"
+            >
+              Raw
+            </button>
+          </div>
+          {/* Rendered Markdown Preview */}
+          {tab === "preview" ? (
+            <div className="prose prose-slate max-w-none bg-white p-4 rounded shadow overflow-x-auto">
+              <ReactMarkdown>{result as string}</ReactMarkdown>
+            </div>
+          ) : (
+            <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-xs max-h-96 mt-2">
+              {result.slice(0, 5000)}
+              {result.length > 5000 && "\n... (truncated)"}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+// Main page: renders the BlogGeneratorForm
+export default function Home() {
+  return <BlogGeneratorForm />;
 }

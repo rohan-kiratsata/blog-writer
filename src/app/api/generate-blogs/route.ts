@@ -1,0 +1,103 @@
+import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import { openai } from "@ai-sdk/openai";
+import { generateText } from "ai";
+
+// Helper to read the global prompt
+async function getPromptTemplate() {
+  // Adjust the path if your prompt.md is elsewhere
+  return await fs.readFile(process.cwd() + "/prompt.md", "utf8");
+}
+
+// Helper to build the full prompt for each idea
+function buildPrompt(promptTemplate: string, idea: string, keywords: string[]) {
+  // Add-on: Insert a clear instruction block for the model
+  // (Do not modify the original prompt, just add below)
+  let keywordStr =
+    keywords.length > 0 ? `\nKeywords: ${keywords.join(", ")}` : "";
+  return `You are to write a blog based on the following idea and keywords.\n\nIdea: ${idea}${keywordStr}\n\n${promptTemplate}`;
+}
+
+// POST handler for generating blogs
+export async function POST(req: NextRequest) {
+  let ideas;
+  try {
+    const body = await req.json();
+    ideas = body.ideas;
+    if (!Array.isArray(ideas) || ideas.length === 0) {
+      console.error("[API] No ideas provided in request:", body);
+      return NextResponse.json(
+        { error: "No ideas provided." },
+        { status: 400 }
+      );
+    }
+  } catch (err) {
+    console.error("[API] Failed to parse request body:", err);
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  // Read the global prompt template
+  let promptTemplate = "";
+  try {
+    promptTemplate = await getPromptTemplate();
+  } catch (err) {
+    console.error("[API] Failed to read prompt.md:", err);
+    return NextResponse.json(
+      { error: "Failed to read prompt template." },
+      { status: 500 }
+    );
+  }
+
+  // For each idea, generate a blog using the model
+  const blogPromises = ideas.map(
+    async (item: { idea: string; keywords: string[] }, idx: number) => {
+      const fullPrompt = buildPrompt(promptTemplate, item.idea, item.keywords);
+      try {
+        const { text } = await generateText({
+          model: openai("gpt-4o"),
+          prompt: fullPrompt,
+          maxTokens: 3000, // ~2300 words, adjust as needed
+          temperature: 0.7,
+        });
+        return text.trim();
+      } catch (err) {
+        console.error(`[API] Blog generation failed for idea #${idx + 1}:`, {
+          idea: item.idea,
+          keywords: item.keywords,
+          error: err instanceof Error ? err.message : err,
+          stack: err instanceof Error ? err.stack : undefined,
+        });
+        throw err;
+      }
+    }
+  );
+
+  // Wait for all blogs to be generated
+  let blogs: string[] = [];
+  try {
+    blogs = await Promise.all(blogPromises);
+  } catch (err) {
+    console.error("[API] One or more blog generations failed:", err);
+    return NextResponse.json(
+      { error: "Blog generation failed. Please try again later." },
+      { status: 500 }
+    );
+  }
+
+  // Bundle all blogs into a single markdown string, separated by ---
+  const bundledMarkdown = blogs.join("\n\n---\n\n");
+
+  // Log the response (first 500 chars and count)
+  console.log(
+    `[API] Returning bundled markdown for ${
+      blogs.length
+    } blog(s):\n${bundledMarkdown.slice(0, 500)}${
+      bundledMarkdown.length > 500 ? "\n... (truncated)" : ""
+    }`
+  );
+
+  return NextResponse.json({ markdown: bundledMarkdown });
+}
