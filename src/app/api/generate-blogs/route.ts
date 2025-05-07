@@ -5,7 +5,7 @@ import { prompt as promptTemplate } from "@/prompt";
 
 // Helper to build the full prompt for each idea
 function buildPrompt(promptTemplate: string, idea: string, keywords: string[]) {
-  let keywordStr =
+  const keywordStr =
     keywords.length > 0 ? `\nKeywords: ${keywords.join(", ")}` : "";
   return `You are to write a blog based on the following idea and keywords.\n\nIdea: ${idea}${keywordStr}\n\n${promptTemplate}`;
 }
