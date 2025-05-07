@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         const { text } = await generateText({
           model: openai("gpt-4o"),
           prompt: fullPrompt,
-          maxTokens: 2200, // ~2300 words, adjust as needed
+          maxTokens: 3000, // ~2300 words, adjust as needed
           temperature: 0.7,
         });
         const blogText = text.trim();
