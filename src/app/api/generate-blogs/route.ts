@@ -13,7 +13,7 @@ async function getPromptTemplate() {
 function buildPrompt(promptTemplate: string, idea: string, keywords: string[]) {
   // Add-on: Insert a clear instruction block for the model
   // (Do not modify the original prompt, just add below)
-  let keywordStr =
+  const keywordStr =
     keywords.length > 0 ? `\nKeywords: ${keywords.join(", ")}` : "";
   return `You are to write a blog based on the following idea and keywords.\n\nIdea: ${idea}${keywordStr}\n\n${promptTemplate}`;
 }
