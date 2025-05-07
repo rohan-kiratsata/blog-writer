@@ -62,7 +62,17 @@ export async function POST(req: NextRequest) {
           maxTokens: 3000, // ~2300 words, adjust as needed
           temperature: 0.7,
         });
-        return text.trim();
+        const blogText = text.trim();
+        // Log the response for this blog
+        console.log(
+          `[API] Blog #${idx + 1} generated for idea: '${
+            item.idea
+          }' | keywords: [${item.keywords.join(", ")}]\n${blogText.slice(
+            0,
+            300
+          )}${blogText.length > 300 ? "\n... (truncated)" : ""}`
+        );
+        return blogText;
       } catch (err) {
         console.error(`[API] Blog generation failed for idea #${idx + 1}:`, {
           idea: item.idea,
