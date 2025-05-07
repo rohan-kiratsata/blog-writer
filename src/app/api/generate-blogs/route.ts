@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-
-// Helper to read the global prompt
-async function getPromptTemplate() {
-  // Adjust the path if your prompt.md is elsewhere
-  return await fs.readFile(process.cwd() + "/public/prompt.md", "utf8");
-}
+import { prompt as promptTemplate } from "@/prompt";
 
 // Helper to build the full prompt for each idea
 function buildPrompt(promptTemplate: string, idea: string, keywords: string[]) {
-  // Add-on: Insert a clear instruction block for the model
-  // (Do not modify the original prompt, just add below)
-  const keywordStr =
+  let keywordStr =
     keywords.length > 0 ? `\nKeywords: ${keywords.join(", ")}` : "";
   return `You are to write a blog based on the following idea and keywords.\n\nIdea: ${idea}${keywordStr}\n\n${promptTemplate}`;
 }
@@ -39,18 +31,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Read the global prompt template
-  let promptTemplate = "";
-  try {
-    promptTemplate = await getPromptTemplate();
-  } catch (err) {
-    console.error("[API] Failed to read prompt.md:", err);
-    return NextResponse.json(
-      { error: "Failed to read prompt template." },
-      { status: 500 }
-    );
-  }
-
   // For each idea, generate a blog using the model
   const blogPromises = ideas.map(
     async (item: { idea: string; keywords: string[] }, idx: number) => {
@@ -59,7 +39,7 @@ export async function POST(req: NextRequest) {
         const { text } = await generateText({
           model: openai("gpt-4o"),
           prompt: fullPrompt,
-          maxTokens: 3000, // ~2300 words, adjust as needed
+          maxTokens: 2200, // ~2300 words, adjust as needed
           temperature: 0.7,
         });
         const blogText = text.trim();
