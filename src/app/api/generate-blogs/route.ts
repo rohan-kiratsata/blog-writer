@@ -6,7 +6,7 @@ import { generateText } from "ai";
 // Helper to read the global prompt
 async function getPromptTemplate() {
   // Adjust the path if your prompt.md is elsewhere
-  return await fs.readFile(process.cwd() + "/prompt.md", "utf8");
+  return await fs.readFile(process.cwd() + "/public/prompt.md", "utf8");
 }
 
 // Helper to build the full prompt for each idea
